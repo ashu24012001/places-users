@@ -1,0 +1,9 @@
+{
+  "env": {
+    "DB_USER": "ashu24012001",
+    "DB_PASSWORD": "ksaurav866",
+    "DB_NAME": "mern",
+    "API_KEY": "pk.07cf3ef1fa1a1cea7b8eccb1fc68524c",
+    "JWT_KEY": "Ashu_token"
+  }
+}
