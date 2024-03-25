@@ -1,14 +1,47 @@
 const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const sharp = require("sharp");
 
 const HttpError = require("../models/http-error");
 const User = require("../models/user");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const dotenv = require("dotenv");
+dotenv.config();
+
+const randomImageName = (bytes = 32) => crypto.randomBytes(bytes).toString("hex");
+
+const bucket_name=process.env.BUCKET_NAME;
+const bucket_region=process.env.BUCKET_REGION;
+const access_key=process.env.ACCESS_KEY;
+const secret_access_key=process.env.SECRET_ACCESS_KEY;
+
+const s3=new S3Client({
+  credentials: {
+    accessKeyId: access_key,
+    secretAccessKey: secret_access_key
+  },
+  region: bucket_region
+});
+
+const imageName = randomImageName();
 
 const getUsers = async (req, res, next) => {
   let users;
   try {
     users = await User.find({}, "-password");
+    
+    for(const user of users) {
+      const getObjectParams = {
+        Bucket: bucket_name,
+        Key: user.image
+      }
+      const command = new GetObjectCommand(getObjectParams);
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      user.imageUrl=url;
+    }
   } catch (err) {
     const error = new HttpError(
       "Fetching users failed, please try again later.",
@@ -20,6 +53,18 @@ const getUsers = async (req, res, next) => {
 };
 
 const signup = async (req, res, next) => {
+ 
+  const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
+  
+  const params = {
+    Bucket: bucket_name,
+    Key: imageName,
+    Body: buffer,
+    ContentType: req.file.mimetype
+  }
+
+  const command = new PutObjectCommand(params);
+  await s3.send(command);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return next(
@@ -61,7 +106,7 @@ const signup = async (req, res, next) => {
   const createdUser = new User({
     name,
     email,
-    image: req.file.path,
+    image: imageName,
     password: hashedPassword,
     places: [],
   });

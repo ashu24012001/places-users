@@ -2,11 +2,34 @@ const fs=require("fs");
 const uuid = require('uuid/v4');
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
+const crypto = require("crypto");
+const sharp = require("sharp");
 
 const HttpError = require('../models/http-error');
 const getCoordsForAddress = require('../util/location');
 const Place = require('../models/place');
 const User = require('../models/user');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const dotenv = require("dotenv");
+dotenv.config();
+
+const randomImageName = (bytes = 32) => crypto.randomBytes(bytes).toString("hex");
+
+const bucket_name=process.env.BUCKET_NAME;
+const bucket_region=process.env.BUCKET_REGION;
+const access_key=process.env.ACCESS_KEY;
+const secret_access_key=process.env.SECRET_ACCESS_KEY;
+
+const s3=new S3Client({
+  credentials: {
+    accessKeyId: access_key,
+    secretAccessKey: secret_access_key
+  },
+  region: bucket_region
+});
+
+const imageName = randomImageName();
 
 const getPlaceById = async (req, res, next) => {
   const placeId = req.params.pid;
@@ -14,6 +37,7 @@ const getPlaceById = async (req, res, next) => {
   let place;
   try {
     place = await Place.findById(placeId);
+    
   } catch (err) {
     const error = new HttpError(
       'Something went wrong, could not find a place.',
@@ -40,7 +64,22 @@ const getPlacesByUserId = async (req, res, next) => {
   let userWithPlaces;
   try {
     userWithPlaces = await User.findById(userId).populate('places');
-  } catch (err) {
+    for(const place of userWithPlaces.places) {
+      const getObjectParams = {
+        Bucket: bucket_name,
+        Key: place.image
+      }
+      const command = new GetObjectCommand(getObjectParams);
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      place.imageUrl=url;
+    }
+      // if (!places || places.length === 0) {
+  if (!userWithPlaces || userWithPlaces.places.length === 0) {
+    return next(
+      new HttpError('Could not find places for the provided user id.', 404)
+    );
+  }
+  } catch (err) {  
     const error = new HttpError(
       'Fetching places failed, please try again later.',
       500
@@ -48,17 +87,21 @@ const getPlacesByUserId = async (req, res, next) => {
     return next(error);
   }
 
-  // if (!places || places.length === 0) {
-  if (!userWithPlaces || userWithPlaces.places.length === 0) {
-    return next(
-      new HttpError('Could not find places for the provided user id.', 404)
-    );
-  }
-
   res.json({ places: userWithPlaces.places.map(place => place.toObject({ getters: true })) });
 };
 
 const createPlace = async (req, res, next) => {
+  const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
+  
+  const params = {
+    Bucket: bucket_name,
+    Key: imageName,
+    Body: buffer,
+    ContentType: req.file.mimetype
+  }
+
+  const command = new PutObjectCommand(params);
+  await s3.send(command);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return next(
@@ -80,7 +123,7 @@ const createPlace = async (req, res, next) => {
     description,
     address,
     location: coordinates,
-    image: req.file.path,      
+    image: imageName,      
     creator: req.userData.userId
   });
 
@@ -184,6 +227,15 @@ const deletePlace = async (req, res, next) => {
     const error = new HttpError('Could not find place for this id.', 404);
     return next(error);
   }
+
+  const params = {
+    Bucket: bucket_name,
+    Key: place.image
+  }
+
+  const command = new DeleteObjectCommand(params);
+  
+  await s3.send(command);
 
   if(place.creator.id!==req.userData.userId) {
     const error = new HttpError(
