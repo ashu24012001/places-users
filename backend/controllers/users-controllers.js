@@ -2,7 +2,7 @@ const { validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const sharp = require("sharp");
+// const sharp = require("sharp");
 
 const HttpError = require("../models/http-error");
 const User = require("../models/user");
@@ -54,12 +54,12 @@ const getUsers = async (req, res, next) => {
 
 const signup = async (req, res, next) => {
  
-  const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
+  // const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
   
   const params = {
     Bucket: bucket_name,
     Key: imageName,
-    Body: buffer,
+    Body: req.file.buffer,
     ContentType: req.file.mimetype
   }
 

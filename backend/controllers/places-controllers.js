@@ -3,7 +3,7 @@ const uuid = require('uuid/v4');
 const { validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const crypto = require("crypto");
-const sharp = require("sharp");
+// const sharp = require("sharp");
 
 const HttpError = require('../models/http-error');
 const getCoordsForAddress = require('../util/location');
@@ -91,12 +91,12 @@ const getPlacesByUserId = async (req, res, next) => {
 };
 
 const createPlace = async (req, res, next) => {
-  const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
+  // const buffer = await sharp(req.file.buffer).resize({height: 1920, width: 1080, fit: "contain"}).toBuffer();
   
   const params = {
     Bucket: bucket_name,
     Key: imageName,
-    Body: buffer,
+    Body: req.file.buffer,
     ContentType: req.file.mimetype
   }
 
