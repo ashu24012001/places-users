@@ -58,7 +58,7 @@ const signup = async (req, res, next) => {
   
   const params = {
     Bucket: bucket_name,
-    Key: imageName,
+    Key: req.file.originalname,
     Body: req.file.buffer,
     ContentType: req.file.mimetype
   }
@@ -106,7 +106,7 @@ const signup = async (req, res, next) => {
   const createdUser = new User({
     name,
     email,
-    image: imageName,
+    image: req.file.originalname,
     password: hashedPassword,
     places: [],
   });

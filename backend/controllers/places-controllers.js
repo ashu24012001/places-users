@@ -95,7 +95,7 @@ const createPlace = async (req, res, next) => {
   
   const params = {
     Bucket: bucket_name,
-    Key: imageName,
+    Key: req.file.originalname,
     Body: req.file.buffer,
     ContentType: req.file.mimetype
   }
@@ -123,7 +123,7 @@ const createPlace = async (req, res, next) => {
     description,
     address,
     location: coordinates,
-    image: imageName,      
+    image: req.file.originalname,      
     creator: req.userData.userId
   });
 
